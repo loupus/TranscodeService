@@ -1,0 +1,41 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cppbuild",
+			"label": "buildgdb",
+			"command": "C:\\msys64\\mingw64\\bin\\g++.exe",
+			"args": [
+				"-Wall",
+				"-g",
+				"${workspaceFolder}\\*.cpp",
+				"-I${workspaceFolder}\\include",
+				"-IE:\\DEV\\BOOST\\boost_1_78_0",
+				"-L${workspaceFolder}\\lib",				
+				"-l:libcurl.lib",
+				"-l:avcodec.lib",
+				"-l:avdevice.lib",
+				"-l:avfilter.lib",
+				"-l:avformat.lib",
+				"-l:avutil.lib",
+				"-l:postproc.lib",
+				"-l:swresample.lib",
+				"-l:swscale.lib",
+				"-lws2_32",
+				"-o",
+				"${fileDirname}\\bin\\TranscodeService.exe"
+			],
+			"options": {
+				"cwd": "${fileDirname}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}, 
+			"detail": "compiler: C:\\msys64\\mingw64\\bin\\g++.exe"
+		}
+	]
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<Config>
+  <apiUser>hakansoyalp</apiUser>
+  <apiPass>uzaKden1z</apiPass>
+  <apiRootUrl>https://api.aa.com.tr</apiRootUrl>
+  <videoDownloadFolder>\\hansel.sistem.turkmedya.local\AGENCIES\</videoDownloadFolder>
+  <logFolder></logFolder>
+  <dbServer>10.1.101.13</dbServer>
+  <dbPort>5432</dbPort>
+  <dbName>agencydb</dbName>
+  <dbUser>postgres</dbUser>
+  <dbPass>fender2</dbPass>
+  <DownloadWaitSeconds>60</DownloadWaitSeconds>
+  <lastSearchTime>2021-11-01 11:15:02</lastSearchTime>
+  <selCategories>Genel*Spor*Ekonomi*Sağlık*Bilim, Teknoloji*Politika*Kültür, Sanat, Yaşam*</selCategories>
+  <selPriorities>1 Flaş*3 Önemli*2 Acil*4 Rutin*5 Özel*6 Arşiv*</selPriorities>
+  <selPackages>Genel*Özel*Yerel*Internet*Şirket*</selPackages>
+  <selTypes>Haber*Fotoğraf*Video*Grafik*Ses*</selTypes>
+</Config>
