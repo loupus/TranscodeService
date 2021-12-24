@@ -32,5 +32,5 @@ class cSocket
     int Initiliaze();
     int Start();
     int Stop();
-    int SendMsg(std::string pMsg, std::string pDestIp, u_short pPort);
+    bool SendMsg(std::string pMsg, std::string pDestIp, u_short pPort);
 };

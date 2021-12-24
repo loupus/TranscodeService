@@ -6,11 +6,13 @@ void Test()
 {
     cSocket* s = cSocket::GetInstance();    
     s->Start();
-   // s->SendMsg("shutdown","127.0.0.1",27015);
+    Sleep(3000);
+    s->SendMsg("shutdown","10.1.2.20",DEFAULT_PORT);
 }
 
 int main()
 {
+    
     Test();
      system("pause");
     return 0;
