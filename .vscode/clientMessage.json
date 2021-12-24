@@ -1,0 +1,12 @@
+{
+    "assetid":"asdlüğişŞpğşLoö",
+    "infile":"\\\\hansel.sistem.turkmedya.local\\AGENCIES\\20211030_3_50666471_70171793_SD.mp4",
+    "outfile":"\\\\hansel.sistem.turkmedya.local\\AGENCIES\\20211030_3_50666471_70171793_SD_Proxy.mp4",
+    "width":854,
+    "height":480,
+    "vbitratekb":600,
+    "abitratekb":128,
+    "vencoder":"H264",
+    "aencoder":"copy"
+}
+

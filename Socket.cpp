@@ -1,4 +1,5 @@
 #include <sstream>
+#include "nlohmann/json.hpp"
 #include "Socket.hpp"
 
 bool cSocket::StopFlag = false;
@@ -61,7 +62,8 @@ void *cSocket::ServerThread(void *pParam)
     char ClientName[NI_MAXHOST] = {0};
     char ClientService[NI_MAXSERV] = {0};
     char *ClientIp = nullptr;
-    int ClientPort = 0;
+   // int ClientPort = 0;
+    cItemInfo temp;
 
     int wsaret = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (wsaret != 0)
@@ -99,7 +101,7 @@ void *cSocket::ServerThread(void *pParam)
 
     while (true) //we are looping endlessly
     {
-        client = accept(server, (struct sockaddr *)&sclient, &sclientlen);  // accept is blocking other queue members
+        client = accept(server, (struct sockaddr *)&sclient, &sclientlen); // accept is blocking other queue members
         if (client == INVALID_SOCKET)
         {
             errcode = WSAGetLastError();
@@ -115,7 +117,7 @@ void *cSocket::ServerThread(void *pParam)
         }
 
         ClientIp = inet_ntoa(sclient.sin_addr);
-        ClientPort = ntohs(sclient.sin_port);
+        //ClientPort = ntohs(sclient.sin_port);
         // get client info =========================================================================================
 
         // Receive until the peer shuts down the connection
@@ -127,7 +129,7 @@ void *cSocket::ServerThread(void *pParam)
         do
         {
             memset(recvbuf, 0, DEFAULT_BUFLEN);
-            iRecResult = recv(client, recvbuf, DEFAULT_BUFLEN, 0);  // todo gonderirse aliyorsun
+            iRecResult = recv(client, recvbuf, DEFAULT_BUFLEN, 0); // todo gonderirse aliyorsun
             if (iRecResult < 0)
             {
                 errcode = WSAGetLastError();
@@ -137,13 +139,11 @@ void *cSocket::ServerThread(void *pParam)
             else if (iRecResult > 0)
             {
                 sb << recvbuf;
-                if(iRecResult < DEFAULT_BUFLEN)         // total mesaj bufferdan kucuk daha bekleme
-                break;
-                
+                if (iRecResult < DEFAULT_BUFLEN) // total mesaj bufferdan kucuk daha bekleme
+                    break;
             }
 
         } while (iRecResult > 0);
-
 
         GelenMesaj = sb.str();
         sb.str("");
@@ -153,46 +153,83 @@ void *cSocket::ServerThread(void *pParam)
         std::cout << "SERVER: Connection from " << ClientIp << std::endl;
         std::cout << "SERVER: Received: " << GelenMesaj << std::endl;
 
+        temp = EvalMessage(GelenMesaj);
+        if(!temp.assetid.empty())
+        {
+            temp.ftime = time(0);
+            temp.clientip = ClientIp;
+            temp.clienthost = ClientName;
+        }
+
+        //todo assetlist oluştur, additem
+
         // send back message ====================================================================================
-        memset(sendbuf, 0, DEFAULT_BUFLEN); 
-        strcpy(sendbuf,"Hadi len ordan");
+        memset(sendbuf, 0, DEFAULT_BUFLEN);
+        strcpy(sendbuf, "Hadi len ordan");
         iSendResult = send(client, sendbuf, strlen(sendbuf), 0);
         if (iSendResult == SOCKET_ERROR)
         {
             errcode = WSAGetLastError();
             std::cout << "Send back failed! Client will be disconnected! \n ClientName: " << ClientName << " ClientIP: " << ClientIp << " Err:" << GetErrorMessage(errcode) << std::endl;
             closesocket(client); // bu client ile ilgili kayit alma
-          
         }
-       
+
         // send back message ====================================================================================
     exitReceive:
-    /*
+        /*
         if(shutdown(client, SD_BOTH) != 0)
         {
             errcode = WSAGetLastError();
             std::cout << "Shutdown client send/recv failed"  << GetErrorMessage(errcode) << std::endl;
         }
         */
-        if(closesocket(client) != 0)
+        if (closesocket(client) != 0)
         {
             errcode = WSAGetLastError();
-            std::cout << "Close client socket failed"  << GetErrorMessage(errcode) << std::endl;
+            std::cout << "Close client socket failed" << GetErrorMessage(errcode) << std::endl;
         }
 
-        if(GelenMesaj == "shutdown")
-        break;
+        if (GelenMesaj == "shutdown")
+            break;
     }
 
 exitListen:
-    if(closesocket(server) != 0)
+    if (closesocket(server) != 0)
     {
         errcode = WSAGetLastError();
-        std::cout << "Close server socket failed"  << GetErrorMessage(errcode) << std::endl;
+        std::cout << "Close server socket failed" << GetErrorMessage(errcode) << std::endl;
     }
     WSACleanup();
     std::cout << "Stopping TCP server" << std::endl;
     return nullptr;
+}
+
+cItemInfo cSocket::EvalMessage(std::string pMsg)
+{
+    cItemInfo back;
+    if (pMsg.empty())
+        return back;
+    if (!nlohmann::json::accept(pMsg))
+    {
+        std::cout << "not valid json for discovery parse" << std::endl;
+        return back;
+    }
+    nlohmann::json j = nlohmann::json::parse(pMsg);
+    if (j.is_discarded())
+    {
+        std::cout << "failed to parse discovery result" << std::endl;
+        return back;
+    }
+    back.assetid = j["assetid"].get<std::string>();
+    back.infile = j["assetid"].get<std::string>();
+    back.outfile = j["outfile"].get<std::string>();
+    back.width = j["width"].get<int>();
+    back.height = j["height"].get<int>();
+    back.vbitratekb = j["vbitratekb"].get<int>();
+    back.abitratekb = j["abitratekb"].get<int>();
+    back.vencoder = j["vencoder"].get<std::string>();
+    back.aencoder = j["aencoder"].get<std::string>();
+    return back;
 }
 
 int cSocket::Start()
@@ -265,7 +302,7 @@ cSocket *cSocket::GetInstance()
 
 bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
 {
-    bool back =false;
+    bool back = false;
     int iResult;
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
@@ -287,7 +324,7 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != NO_ERROR)
     {
-        std::cout << "CLIENT: Startup failed: "  <<  std::endl;     
+        std::cout << "CLIENT: Startup failed: " << std::endl;
         goto SendExit;
     }
 
@@ -297,7 +334,7 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     if (ConnectSocket == INVALID_SOCKET)
     {
         errcode = WSAGetLastError();
-        std::cout << "CLIENT: Socket failed: "  << GetErrorMessage(errcode) << std::endl;     
+        std::cout << "CLIENT: Socket failed: " << GetErrorMessage(errcode) << std::endl;
         goto SendExit;
     }
 
@@ -314,7 +351,7 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     if (iResult == SOCKET_ERROR)
     {
         errcode = WSAGetLastError();
-        std::cout << "CLIENT: Connect failed: "  << GetErrorMessage(errcode) << std::endl;     
+        std::cout << "CLIENT: Connect failed: " << GetErrorMessage(errcode) << std::endl;
         goto SendExit;
     }
 
@@ -322,7 +359,7 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     if (iResult == SOCKET_ERROR)
     {
         errcode = WSAGetLastError();
-        std::cout << "CLIENT: Send failed: "  << GetErrorMessage(errcode) << std::endl;     
+        std::cout << "CLIENT: Send failed: " << GetErrorMessage(errcode) << std::endl;
         goto SendExit;
     }
 
@@ -332,13 +369,13 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
         std::cout << "CLIENT: Received: " << recvbuf << std::endl;
     }
     else if (iResult == 0)
-          std::cout << "CLIENT: Connection closed" << std::endl;
+        std::cout << "CLIENT: Connection closed" << std::endl;
     else
-      {
-          errcode = WSAGetLastError();
-          std::cout << "CLIENT: Receive failed: "  << GetErrorMessage(errcode) << std::endl;
-          goto SendExit;
-      }
+    {
+        errcode = WSAGetLastError();
+        std::cout << "CLIENT: Receive failed: " << GetErrorMessage(errcode) << std::endl;
+        goto SendExit;
+    }
 
     back = true;
     // shutdown the connection since no more data will be sent
@@ -346,17 +383,17 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     if (iResult == SOCKET_ERROR)
     {
 
-          errcode = WSAGetLastError();
-          std::cout << "CLIENT: shutdown failed: "  << GetErrorMessage(errcode) << std::endl;
-          goto SendExit;
+        errcode = WSAGetLastError();
+        std::cout << "CLIENT: shutdown failed: " << GetErrorMessage(errcode) << std::endl;
+        goto SendExit;
     }
 
-    SendExit:
+SendExit:
     // close the socket
     iResult = closesocket(ConnectSocket);
     if (iResult == SOCKET_ERROR)
-    {         
-        std::cout << "CLIENT: close failed: "  << GetErrorMessage(errcode) << std::endl;      
+    {
+        std::cout << "CLIENT: close failed: " << GetErrorMessage(errcode) << std::endl;
     }
     WSACleanup();
     return back;
