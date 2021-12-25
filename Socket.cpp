@@ -1,5 +1,6 @@
 #include <sstream>
-#include "nlohmann/json.hpp"
+
+#include "ItemQueue.hpp"
 #include "Socket.hpp"
 
 bool cSocket::StopFlag = false;
@@ -45,6 +46,7 @@ int cSocket::Initiliaze()
 void *cSocket::ServerThread(void *pParam)
 {
     std::cout << "Starting up TCP server" << std::endl;
+    int iResult = 0;
     int errcode = 0;
     int iRecResult = 0;
     int iSendResult = 0;
@@ -55,15 +57,19 @@ void *cSocket::ServerThread(void *pParam)
     sockaddr_in sclient;
     char sendbuf[DEFAULT_BUFLEN] = {0};
     char recvbuf[DEFAULT_BUFLEN] = {0};
+    int SendReceiveTimeout = 3000; 
     std::stringstream sb;
     std::string GelenMesaj;
+    std::string GidenMesaj;
 
     int sclientlen = sizeof(sclient);
     char ClientName[NI_MAXHOST] = {0};
     char ClientService[NI_MAXSERV] = {0};
     char *ClientIp = nullptr;
-   // int ClientPort = 0;
+    // int ClientPort = 0;
     cItemInfo temp;
+    cServerResponse sr;
+  
 
     int wsaret = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (wsaret != 0)
@@ -91,6 +97,23 @@ void *cSocket::ServerThread(void *pParam)
         std::cout << GetErrorMessage(errcode) << std::endl;
         goto exitListen;
     }
+
+    iResult = setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char *) &SendReceiveTimeout, sizeof(int));
+    if (iResult == SOCKET_ERROR) 
+    {
+        errcode = WSAGetLastError();
+        std::cout << "CLIENT: set receive timeout failed: " << GetErrorMessage(errcode) << std::endl;
+      goto exitListen;
+    } 
+
+    iResult = setsockopt(server, SOL_SOCKET, SO_SNDTIMEO, (char *) &SendReceiveTimeout, sizeof(int));
+    if (iResult == SOCKET_ERROR) 
+    {
+        errcode = WSAGetLastError();
+        std::cout << "CLIENT: set send timeout failed: " << GetErrorMessage(errcode) << std::endl;
+        goto exitListen;
+    } 
+
 
     if (listen(server, SOMAXCONN) != 0)
     {
@@ -150,22 +173,42 @@ void *cSocket::ServerThread(void *pParam)
         sb.clear();
         sb.flush();
 
+
+  if (GelenMesaj == "shutdown") break; 
+
         std::cout << "SERVER: Connection from " << ClientIp << std::endl;
         std::cout << "SERVER: Received: " << GelenMesaj << std::endl;
 
-        temp = EvalMessage(GelenMesaj);
-        if(!temp.assetid.empty())
+        if (GelenMesaj == "shutdown")
         {
-            temp.ftime = time(0);
-            temp.clientip = ClientIp;
-            temp.clienthost = ClientName;
+            GidenMesaj = "BYE BYE";
         }
+        else
+        {
+            temp = EvalMessage(GelenMesaj);
+            if (!temp.assetid.empty())
+            {
+                temp.ftime = time(0);
+                temp.clientip = ClientIp;
+                temp.clienthost = ClientName;
+                ItemQueue::AddItem(temp);
+                sr.assetid = temp.assetid;
+                sr.iitemstate = ItemState::queued;
+                sr.success = true;
+            }
+            else
+            {
+                sr.errmessage = "Item info not valid";
+                sr.iitemstate = ItemState::failed;
+                sr.success = false;
+            }
 
-        //todo assetlist oluştur, additem
+            GidenMesaj = sr.toJsonStr();
+        }
 
         // send back message ====================================================================================
         memset(sendbuf, 0, DEFAULT_BUFLEN);
-        strcpy(sendbuf, "Hadi len ordan");
+        strcpy(sendbuf, GidenMesaj.c_str());
         iSendResult = send(client, sendbuf, strlen(sendbuf), 0);
         if (iSendResult == SOCKET_ERROR)
         {
@@ -189,11 +232,12 @@ void *cSocket::ServerThread(void *pParam)
             std::cout << "Close client socket failed" << GetErrorMessage(errcode) << std::endl;
         }
 
-        if (GelenMesaj == "shutdown")
-            break;
+          if (GelenMesaj == "shutdown") break; 
     }
 
 exitListen:
+
+    shutdown(server,SD_BOTH); 
     if (closesocket(server) != 0)
     {
         errcode = WSAGetLastError();
@@ -201,7 +245,7 @@ exitListen:
     }
     WSACleanup();
     std::cout << "Stopping TCP server" << std::endl;
-    return nullptr;
+    pthread_exit(nullptr);
 }
 
 cItemInfo cSocket::EvalMessage(std::string pMsg)
@@ -239,14 +283,15 @@ int cSocket::Start()
     rv = pthread_create(&thHandle, nullptr, &cSocket::ServerThread, (void *)this);
     if (rv != 0)
     {
-        //std::cout << dye::red("ERR ===> Transcode thread create failed! HandleX:")  << thHandle.x << std::endl;
-        std::cout << "ERR ===> Transcode thread create failed! RV:" << std::endl;
+        std::cout << "ERR ===> Transcode thread create failed!" << std::endl;
     }
-    else
+
+    rv = pthread_detach(thHandle);
+    if (rv != 0)
     {
-        //std::cout << dye::blue("Thread: ")  << thHandle.x << std::endl;
-        //std::cout << hue::blue << "Thread: " << thHandle.x << hue::reset << std::endl;
+        std::cout << "ERR ===> Transcode thread detach failed!" << std::endl;
     }
+
     return rv;
 }
 
@@ -308,12 +353,18 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     SOCKET ConnectSocket = INVALID_SOCKET;
     struct sockaddr_in clientService;
     int errcode = 0;
-
+    
     int recvbuflen = DEFAULT_BUFLEN;
     char sendbuf[DEFAULT_BUFLEN] = {0};
     char recvbuf[DEFAULT_BUFLEN] = {0};
+    int pStrLen = 0;
+    int SendReceiveTimeout = 3000; 
 
-    int pStrLen = strlen(pMsg.c_str());
+
+
+  
+
+    pStrLen = strlen(pMsg.c_str());
     if (pStrLen < (DEFAULT_BUFLEN - 1))
         strcpy(sendbuf, pMsg.c_str());
     else
@@ -345,6 +396,24 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
     clientService.sin_addr.s_addr = inet_addr(pDestIp.c_str());
     clientService.sin_port = htons(pPort);
 
+
+    iResult = setsockopt(ConnectSocket, SOL_SOCKET, SO_RCVTIMEO, (char *) &SendReceiveTimeout, sizeof(int));
+    if (iResult == SOCKET_ERROR) 
+    {
+        errcode = WSAGetLastError();
+        std::cout << "CLIENT: set receive timeout failed: " << GetErrorMessage(errcode) << std::endl;
+        goto SendExit;
+    } 
+
+    iResult = setsockopt(ConnectSocket, SOL_SOCKET, SO_SNDTIMEO, (char *) &SendReceiveTimeout, sizeof(int));
+    if (iResult == SOCKET_ERROR) 
+    {
+        errcode = WSAGetLastError();
+        std::cout << "CLIENT: set send timeout failed: " << GetErrorMessage(errcode) << std::endl;
+        goto SendExit;
+    } 
+
+
     //----------------------
     // Connect to server.
     iResult = connect(ConnectSocket, (SOCKADDR *)&clientService, sizeof(clientService));
@@ -354,6 +423,9 @@ bool cSocket::SendMsg(std::string pMsg, std::string pDestIp, u_short pPort)
         std::cout << "CLIENT: Connect failed: " << GetErrorMessage(errcode) << std::endl;
         goto SendExit;
     }
+
+
+
 
     iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
     if (iResult == SOCKET_ERROR)
