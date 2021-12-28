@@ -1,5 +1,6 @@
 #include <iostream>
 #include "Socket.hpp"
+#include "nlohmann/json.hpp"
 
 void Test()
 {

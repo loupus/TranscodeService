@@ -27,8 +27,8 @@ cItemInfo& ItemQueue::FrontItem()
 
 size_t ItemQueue::GetQueueSize() 
 {
-    size_t back = 0;
     std::unique_lock<std::mutex> lock(mtx);
+    size_t back = 0;    
     back = q.size();
     lock.unlock();
     return back;
@@ -42,4 +42,33 @@ void ItemQueue::EmptyQueue()
         q.pop();
     }
     lock.unlock();
+}
+
+ItemQueue* ItemQueue::GetInstance() 
+{
+    if (thisObj == nullptr)
+    {
+        thisObj = new ItemQueue();
+    }
+    return thisObj;
+}
+
+void ItemQueue::DeleteInstance() 
+{
+    if (thisObj != nullptr)
+    {
+        delete thisObj;
+        thisObj = nullptr;
+    }
+}
+
+ItemQueue::ItemQueue() 
+{
+    
+}
+
+ItemQueue::~ItemQueue() 
+{
+    EmptyQueue() ;
+    DeleteInstance(); // ???
 }
