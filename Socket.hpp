@@ -4,11 +4,12 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-#include <windows.h>
+#include "Globals.hpp"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iostream>
 #include "ItemInfo.hpp"
+#include "transcoder.hpp"
 
 #define DEFAULT_BUFLEN 2048
 #define DEFAULT_PORT 27015
@@ -25,6 +26,8 @@ private:
     static std::string GetErrorMessage(int perrcode);
     static void *ServerThread(void *pParam);
     static cItemInfo EvalMessage(std::string pMsg);
+    Transcoder tt;
+    void OnTranscodeComplete(TranscoderCBArgument pArg);
     cSocket()
     {
     }
@@ -35,7 +38,7 @@ private:
         public :
         ~Cleanup();
     };
-    
+
 public:
     static cSocket *GetInstance();
     cSocket(cSocket const&) = delete;

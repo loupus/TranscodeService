@@ -1,5 +1,4 @@
 #include <sstream>
-#include "ItemQueue.hpp"
 #include "ServerResponse.hpp"
 #include "Socket.hpp"
 
@@ -47,6 +46,12 @@ int cSocket::Initiliaze()
 
 void *cSocket::ServerThread(void *pParam)
 {
+    if(pParam == nullptr)
+    {
+        std::cout << "Server failed to start: null argument" << std::endl;
+        return nullptr;
+    }
+    cSocket* thisObj = reinterpret_cast<cSocket*>(pParam);
     std::cout << "Starting up TCP server" << std::endl;
     int iResult = 0;
     int errcode = 0;
@@ -196,7 +201,8 @@ void *cSocket::ServerThread(void *pParam)
                 temp.ftime = time(0);
                 temp.clientip = ClientIp;
                 temp.clienthost = ClientName;
-                ItemQueue::AddItem(temp);
+              //  ItemQueue::AddItem(temp);
+                thisObj->tt.AddItem(temp);
                 sr.assetid = temp.assetid;
                 sr.iitemstate = ItemState::queued;
                 sr.success = true;
@@ -279,7 +285,7 @@ cItemInfo cSocket::EvalMessage(std::string pMsg)
         return back;
     }
     back.assetid = j["assetid"].get<std::string>();
-    back.infile = j["assetid"].get<std::string>();
+    back.infile = j["infile"].get<std::string>();
     back.outfile = j["outfile"].get<std::string>();
     back.width = j["width"].get<int>();
     back.height = j["height"].get<int>();
@@ -290,8 +296,24 @@ cItemInfo cSocket::EvalMessage(std::string pMsg)
     return back;
 }
 
+void cSocket::OnTranscodeComplete(TranscoderCBArgument pArg)
+{
+    std::cout << "AssetID: " << pArg.AssetId << " Success:" << pArg.Success << " ErrMsg:" << pArg.ErrMessage << " ProxyFile:" << pArg.ProxyFile << std::endl;
+}
+
 int cSocket::Start()
 {
+    ITranscoderCallBack *OnMesaj = nullptr;
+    OnMesaj = new CTransCoderCallBack<cSocket>(this, &cSocket::OnTranscodeComplete);
+    if (OnMesaj == nullptr)
+    {
+        std::cout << "ERR ===> Transcoder callback create failed!" << std::endl;
+        return -1;
+    }
+    tt.SetCallBack(OnMesaj);
+    tt.Start();
+
+
     int rv = 0;
     StopFlag = false;
     rv = pthread_create(&thHandle, nullptr, &cSocket::ServerThread, (void *)this);
@@ -312,21 +334,8 @@ int cSocket::Start()
 int cSocket::Stop()
 {
     int rv = 0;
-    void *res;
-    StopFlag = true;
-    rv = pthread_join(thHandle, &res);
-    if (rv != 0)
-    {
-        std::cout << "	ERR ====> join failed. ErrCode:" << rv << std::endl;
-    }
-
-    if (res == PTHREAD_CANCELED)
-        std::cout << "thread joined" << std::endl;
-    else
-    {
-
-        std::cout << "ERR ====> thread join problem! RES:" << (char *)res << std::endl;
-    }
+    SendMsg("shutdown", "10.1.2.20", DEFAULT_PORT);
+    tt.Stop();
     return rv;
 }
 

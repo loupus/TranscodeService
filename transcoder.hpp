@@ -23,6 +23,7 @@ extern "C"
 #include <mutex>
 #include "Globals.hpp"
 #include "TranscodeCallback.h"
+#include "ItemInfo.hpp"
 
 
 
@@ -117,41 +118,27 @@ typedef struct RetValStruct
 }RetVal;
 
 
-typedef struct TSettingsStruct
-{
-	std::string assetid;
-	std::string infile;
-	std::string outfile;
-	int width=0;
-	int height=0;
-	int VbitrateKb=0;
-	int AbitrateKb=0;
-	TSettingsStruct(){};
-}TSettings;
-
 
 class Transcoder
 {
     public:
 	Transcoder();
 	~Transcoder();
-	BackObject DoTransCode();
-	void CommitSettings(TSettings pSettings);
+	void CommitSettings(cItemInfo &pSettings);
 	void SetCallBack(ITranscoderCallBack* pcb);
-	BackObject TranscodeAS(TSettings pSettings);
-	void TranscodeASv(TSettings pSettings, ITranscoderCallBack* pCallback);
-	void AddItem(TSettings &pItem);
+	BackObject TranscodeAS(cItemInfo &pItem);
+	void AddItem(cItemInfo &pItem);
 	void Start();
 	void Stop();
 
     private:
 	AlaContext ctx;
-	std::queue<TSettings> tq;
+	std::queue<cItemInfo> tq;
 	bool StopFlag = false;
 	pthread_t thHandle;
 	pthread_attr_t thAttr;
 	std::mutex mtx;
-	TSettings GetFront();
+	cItemInfo GetFront();
 	void PopItem();
 	int GetQueueSize();
 	
@@ -172,7 +159,7 @@ class Transcoder
     int freeCtx(AlaContext* ctx);
     BackObject transcode_loop(AlaContext* ctx);
 	void FireCallBack(TranscoderCBArgument pArg);
-	static void* Alomelo(void*arg);
+	static void* ThreadFunc(void*arg);
 	
 	
 

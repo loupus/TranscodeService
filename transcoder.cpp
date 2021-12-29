@@ -1,19 +1,17 @@
 
 #include <iostream>
 #include <sstream>
-#include "color.hpp"
 #include "transcoder.hpp"
 
 Transcoder::Transcoder()
 {
-	std::cout << "transcoder object created" << std::endl;
 }
 
 Transcoder::~Transcoder()
 {
-	std::cout << "transcoder object deleted" << std::endl;
+	//std::cout << "transcoder object deleted" << std::endl;
 	Stop();
-	std::queue<TSettings>  empty;
+	std::queue<cItemInfo>  empty;
 	std::swap(tq,empty);
 	if(callback)
 	{
@@ -22,19 +20,17 @@ Transcoder::~Transcoder()
 	}
 }
 
-void Transcoder::AddItem(TSettings &pItem)
+void Transcoder::AddItem(cItemInfo &pItem)
 {
 
 	std::unique_lock<std::mutex> lock(mtx);
 	tq.push(pItem);
 	lock.unlock();
-
-
 }
 
-TSettings Transcoder::GetFront()
+cItemInfo Transcoder::GetFront()
 	{
-		TSettings back;
+		cItemInfo back;
 		std::unique_lock<std::mutex> lock(mtx);
 		if(!tq.empty())
 			back = tq.front();
@@ -58,7 +54,7 @@ void Transcoder::PopItem()
 	lock.unlock();
 }
 
-void Transcoder::CommitSettings(TSettings pSettings)
+void Transcoder::CommitSettings(cItemInfo &pSettings)
 {
 	ctx.assetid = pSettings.assetid;
 	ctx.inFile = pSettings.infile.c_str();
@@ -66,13 +62,13 @@ void Transcoder::CommitSettings(TSettings pSettings)
 	ctx.VideoEncCodecID = AV_CODEC_ID_H264;
 	ctx.VideoEncWidth = pSettings.width > 0 ? pSettings.width : 480;
 	ctx.VideoEncHeight = pSettings.height > 0 ? pSettings.height : 270;
-	ctx.VideoEncBitrate = pSettings.VbitrateKb > 0 ? pSettings.VbitrateKb * 1000 : 1000 * 1000; // 1000 kilobit /s
+	ctx.VideoEncBitrate = pSettings.vbitratekb > 0 ? pSettings.vbitratekb * 1000 : 1000 * 1000; // 1000 kilobit /s
 	ctx.VideoEncPixelFormat = AV_PIX_FMT_YUV420P;
 	ctx.VideoEncFrameRate.num = 25;
 	ctx.VideoEncFrameRate.den = 1;
 	ctx.AudioEncCodecID = AV_CODEC_ID_AAC;
 	ctx.AudioEncOutputChannels = 2;
-	ctx.AudioEncBitrate = pSettings.AbitrateKb > 0 ? pSettings.AbitrateKb * 1000 : 1000 * 196; // 196 kilobit /s
+	ctx.AudioEncBitrate = pSettings.abitratekb > 0 ? pSettings.abitratekb * 1000 : 1000 * 196; // 196 kilobit /s
 	ctx.AudioEncSampleFormat = AV_SAMPLE_FMT_FLTP;
 	ctx.AudioChannelLayout = AV_CH_LAYOUT_STEREO;
 }
@@ -806,91 +802,6 @@ BackObject Transcoder::transcode_loop(AlaContext *ctx)
 	return back;
 }
 
-BackObject Transcoder::DoTransCode()
-{
-	BackObject back;
-	int rv = 0;
-	TranscoderCBArgument cba;
-	cba.AssetId = ctx.assetid;
-	if (ctx.inFile.empty() || ctx.outFile.empty())
-	{
-		back.Success = false;
-		back.ErrDesc = "Settings not received";
-		cba.Success = false;
-		cba.ErrMessage = "Settings not received";
-		FireCallBack(cba);
-		return back;
-	}
-
-	av_log_set_level(AV_LOG_ERROR);
-
-	back = open_input_file(&ctx);
-	if (!back.Success)
-	{
-		cba.Success = false;
-		cba.ErrMessage = "Failed to open input file";
-		FireCallBack(cba);
-		return back;
-	}
-
-	rv = avformat_alloc_output_context2(&ctx.EncFormCtx, NULL, NULL, ctx.outFile.c_str());
-	if (rv < 0 || !(ctx.EncFormCtx))
-	{
-		back.Success = false;
-		back.ErrDesc = "avformat_alloc_output_context2 failed";
-		cba.Success = false;
-		cba.ErrMessage = "avformat_alloc_output_context2 failed";
-		FireCallBack(cba);
-		return back;
-	}
-
-	back = add_video_stream(&ctx);
-	if (!back.Success)
-	{
-		cba.Success = false;
-		cba.ErrMessage = back.ErrDesc;
-		FireCallBack(cba);
-		return back;
-	}
-
-	back = add_audio_stream_clone(&ctx);
-	if (!back.Success)
-	{
-		cba.Success = false;
-		cba.ErrMessage = back.ErrDesc;
-		FireCallBack(cba);
-		return back;
-	}
-
-	back = set_muxer(&ctx);
-	if (!back.Success)
-	{
-		cba.Success = false;
-		cba.ErrMessage = back.ErrDesc;
-		FireCallBack(cba);
-		return back;
-	}
-
-	back = transcode_loop(&ctx);
-	if (!back.Success)
-	{
-		cba.Success = false;
-		cba.ErrMessage = back.ErrDesc;
-		FireCallBack(cba);
-	}
-	else
-	{
-		cba.Success = true;
-		cba.ErrMessage = "";
-		cba.ProxyFile = ctx.outFile;
-		FireCallBack(cba);
-	}
-
-	rv = freeCtx(&ctx);
-
-	return back;
-}
-
 void Transcoder::SetCallBack(ITranscoderCallBack *pcb)
 {
 	if(pcb)
@@ -908,25 +819,25 @@ void Transcoder::FireCallBack(TranscoderCBArgument pArg)
 		std::cout << "no valid callbacks!" << std::endl;
 }
 
-BackObject Transcoder::TranscodeAS(TSettings pSettings)
+BackObject Transcoder::TranscodeAS(cItemInfo &pItem)
 {
 	BackObject back;
 	AlaContext ctx1;
 	int rv = 0;
 
-	ctx1.assetid = pSettings.assetid;
-	ctx1.inFile = pSettings.infile.c_str();
-	ctx1.outFile = pSettings.outfile.c_str();
+	ctx1.assetid = pItem.assetid;
+	ctx1.inFile = pItem.infile.c_str();
+	ctx1.outFile = pItem.outfile.c_str();
 	ctx1.VideoEncCodecID = AV_CODEC_ID_H264;
-	ctx1.VideoEncWidth = pSettings.width > 0 ? pSettings.width : 480;
-	ctx1.VideoEncHeight = pSettings.height > 0 ? pSettings.height : 270;
-	ctx1.VideoEncBitrate = pSettings.VbitrateKb > 0 ? pSettings.VbitrateKb * 1000 : 1000 * 1000; // 1000 kilobit /s
+	ctx1.VideoEncWidth = pItem.width > 0 ? pItem.width : 480;
+	ctx1.VideoEncHeight = pItem.height > 0 ? pItem.height : 270;
+	ctx1.VideoEncBitrate = pItem.vbitratekb > 0 ? pItem.vbitratekb * 1000 : 1000 * 1000; // 1000 kilobit /s
 	ctx1.VideoEncPixelFormat = AV_PIX_FMT_YUV420P;
 	ctx1.VideoEncFrameRate.num = 25;
 	ctx1.VideoEncFrameRate.den = 1;
 	ctx1.AudioEncCodecID = AV_CODEC_ID_AAC;
 	ctx1.AudioEncOutputChannels = 2;
-	ctx1.AudioEncBitrate = pSettings.AbitrateKb > 0 ? pSettings.AbitrateKb * 1000 : 1000 * 196; // 196 kilobit /s
+	ctx1.AudioEncBitrate = pItem.abitratekb > 0 ? pItem.abitratekb * 1000 : 1000 * 196; // 196 kilobit /s
 	ctx1.AudioEncSampleFormat = AV_SAMPLE_FMT_FLTP;
 	ctx1.AudioChannelLayout = AV_CH_LAYOUT_STEREO;
 
@@ -977,88 +888,7 @@ BackObject Transcoder::TranscodeAS(TSettings pSettings)
 	return back;
 }
 
-void Transcoder::TranscodeASv(TSettings pSettings, ITranscoderCallBack *pCallback)
-{
-	BackObject back;
-	TranscoderCBArgument cbArg;
-	cbArg.AssetId = pSettings.assetid;
-	AlaContext ctx1;
-	int rv = 0;
-
-	ctx1.assetid = pSettings.assetid;
-	ctx1.inFile = pSettings.infile.c_str();
-	ctx1.outFile = pSettings.outfile.c_str();
-	ctx1.VideoEncCodecID = AV_CODEC_ID_H264;
-	ctx1.VideoEncWidth = pSettings.width > 0 ? pSettings.width : 480;
-	ctx1.VideoEncHeight = pSettings.height > 0 ? pSettings.height : 270;
-	ctx1.VideoEncBitrate = pSettings.VbitrateKb > 0 ? pSettings.VbitrateKb * 1000 : 1000 * 1000; // 1000 kilobit /s
-	ctx1.VideoEncPixelFormat = AV_PIX_FMT_YUV420P;
-	ctx1.VideoEncFrameRate.num = 25;
-	ctx1.VideoEncFrameRate.den = 1;
-	ctx1.AudioEncCodecID = AV_CODEC_ID_AAC;
-	ctx1.AudioEncOutputChannels = 2;
-	ctx1.AudioEncBitrate = pSettings.AbitrateKb > 0 ? pSettings.AbitrateKb * 1000 : 1000 * 196; // 196 kilobit /s
-	ctx1.AudioEncSampleFormat = AV_SAMPLE_FMT_FLTP;
-	ctx1.AudioChannelLayout = AV_CH_LAYOUT_STEREO;
-
-	if (ctx1.inFile.empty() || ctx1.outFile.empty())
-	{
-		cbArg.Success = false;
-		cbArg.ErrMessage = "Settings not received";
-		return pCallback->Call(cbArg);
-	}
-
-	av_log_set_level(AV_LOG_ERROR);
-
-	back = open_input_file(&ctx1);
-	if (!back.Success)
-	{
-		cbArg.Success = false;
-		cbArg.ErrMessage = back.ErrDesc;
-		return pCallback->Call(cbArg);
-	}
-
-	rv = avformat_alloc_output_context2(&ctx1.EncFormCtx, NULL, NULL, ctx1.outFile.c_str());
-	if (rv < 0 || !(ctx1.EncFormCtx))
-	{
-		cbArg.Success = false;
-		cbArg.ErrMessage = "avformat_alloc_output_context2 failed";
-		return pCallback->Call(cbArg);
-	}
-
-	back = add_video_stream(&ctx1);
-	if (!back.Success)
-	{
-		cbArg.Success = false;
-		cbArg.ErrMessage = back.ErrDesc;
-		return pCallback->Call(cbArg);
-	}
-
-	back = add_audio_stream_clone(&ctx1);
-	if (!back.Success)
-	{
-		cbArg.Success = false;
-		cbArg.ErrMessage = back.ErrDesc;
-		return pCallback->Call(cbArg);
-	}
-
-	back = set_muxer(&ctx1);
-	if (!back.Success)
-	{
-		cbArg.Success = false;
-		cbArg.ErrMessage = back.ErrDesc;
-		return pCallback->Call(cbArg);
-	}
-
-	back = transcode_loop(&ctx1);
-	rv = freeCtx(&ctx1);
-
-	cbArg.Success = back.Success;
-	cbArg.ErrMessage = back.ErrDesc;
-	return pCallback->Call(cbArg);
-}
-
-void *Transcoder::Alomelo(void *arg)
+void *Transcoder::ThreadFunc(void *arg)
 {
 	Transcoder *pObj = reinterpret_cast<Transcoder*>(arg);
 	if(pObj == nullptr) return nullptr;
@@ -1075,7 +905,7 @@ void *Transcoder::Alomelo(void *arg)
 		{
 			//std::cout << "queue size var..." << std::endl;
 			//TSettings anItem = pObj->tq.front();
-			TSettings anItem = pObj->GetFront();
+			cItemInfo anItem = pObj->GetFront();
 			if(anItem.infile.empty() || anItem.outfile.empty())
 			{
 				pObj->PopItem();
@@ -1110,7 +940,7 @@ void *Transcoder::Alomelo(void *arg)
 	}
 
 	std::cout << "Transcoder is stopping..." << std::endl;
-   	pthread_exit(NULL);	
+   	//pthread_exit(NULL);	
 	return nullptr;
 }
 
@@ -1118,16 +948,12 @@ void Transcoder::Start()
 {
 	int rv  = 0;
 	StopFlag = false;
-
 	TranscoderCBArgument targ;
-	FireCallBack(targ);
-
-
-	rv =  pthread_create(&thHandle, nullptr, &Transcoder::Alomelo, (void *)this);
+	rv =  pthread_create(&thHandle, nullptr, &Transcoder::ThreadFunc, (void *)this);
 	if(rv != 0)
 	{
 		//std::cout << dye::red("ERR ===> Transcode thread create failed! HandleX:")  << thHandle.x << std::endl;
-		std::cout <<  hue::red << "ERR ===> Transcode thread create failed! RV:" <<  hue::reset << std::endl; 
+		std::cout <<   "ERR ===> Transcode thread create failed! RV:" <<   std::endl; 
 	}
 	else
 	{
@@ -1154,7 +980,7 @@ void Transcoder::Stop()
 	rv = pthread_join(thHandle, &res);
 	if (rv != 0)
 	{
-			std::cout << dye::red("	ERR ====> join failed. ErrCode:") << rv << std::endl;
+			//std::cout << "	ERR ====> join failed. ErrCode:" << rv << std::endl;
 			
 	}
 		
@@ -1165,7 +991,7 @@ void Transcoder::Stop()
 	else
 	{
 		
-		std::cout << dye::red( "ERR ====> thread join problem! RES:") << (char*)res <<std::endl;
+	//	std::cout <<  "ERR ====> thread join problem! RES:" << (char*)res <<std::endl;
 		
 	}
 		
